@@ -1,3 +1,4 @@
+import asyncio
 import configparser
 import logging
 import os
@@ -9,8 +10,10 @@ from email.mime.text import MIMEText
 from pathlib import Path
 from zipfile import ZipFile
 
-from ftplib import FTP, error_perm
 import backoff
+from aioftp import ClientSession
+from aiogram import Bot
+from aiogram.utils.exceptions import NetworkError
 
 cfg = configparser.ConfigParser(inline_comment_prefixes="#")
 cfg.read('config.cfg')
@@ -49,7 +52,7 @@ def get_downloaded_files():
 
 def exception_handler(e: Exception) -> None:
     print(e)
-    logger.exception("An error has occurred. Let's try again")
+    logger.exception(f"An error has occurred. Let's try again")
 
 
 def send_logs_via_email():
@@ -78,7 +81,7 @@ def send_logs_via_email():
     # Add header as key/value pair to attachment part
     part.add_header(
         "Content-Disposition",
-        "attachment; filename=ftp_downloader.log",
+        f"attachment; filename= ftp_downloader.log",
     )
 
     # Add attachment to message and convert message to string
@@ -91,82 +94,79 @@ def send_logs_via_email():
         server.sendmail(cfg.get('LOADER_EMAIL', 'email'), cfg.get('EMAIL', 'email'), text)
 
 
+async def send_logs_via_tg():
+    bot = Bot(token=cfg.get('TG', 'bot_token'))
+    with open(cfg.get('LOG_FILES', 'default'), 'rb') as file:
+        await bot.send_document(cfg.get('TG', 'chat_id'), document=file)
+
+
+async def send_logs():
+    try:
+        await send_logs_via_tg()
+    except NetworkError:
+        logger.exception("Can't connect to Telegram server")
+        send_logs_via_email()
+
+
 @backoff.on_exception(backoff.expo, Exception, max_tries=MAX_TRIES, giveup=exception_handler)
-def main():
+async def main():
     create_storage_dirs()
     downloaded_files = get_downloaded_files()
 
-    ftp_session = FTP(cfg.get('FTP', 'host'),
-                      user=cfg.get('FTP', 'user'),
-                      passwd=cfg.get('FTP', 'pass'))
+    async with ClientSession(cfg.get('FTP', 'host'), cfg.get('FTP', 'port'),
+                             cfg.get('FTP', 'user'), cfg.get('FTP', 'pass')) as ftp_session:
+        await ftp_session.change_directory(cfg.get('FTP', 'dir'))
+        for filename, info in (await ftp_session.list(recursive=True)):
+            filename = Path(filename)
+            if info['type'] == 'dir':
+                continue
 
-    ftp_session.cwd(cfg.get('FTP', 'dir'))
+            prefix_filter = re.search(r'([^_])*', str(filename))
+            if prefix_filter is None:
+                logger.info(f"Unknown file: {filename}")
+                continue
 
-    # print(ftp_session.nlst())
-    # for i in ftp_session.mlsd():
-    #     print(i)
+            prefix = prefix_filter.group().lower()
+            if prefix == 'adobestock':
+                prefix = 'fotolia'
 
-    file_names = []
-    for file_name in ftp_session.nlst():
-        try:
-            ftp_session.cwd(file_name)
-            ftp_session.cwd(cfg.get('FTP', 'dir'))
-            continue
-        except error_perm as e:
-            pass
+            if prefix not in PREFIXES:
+                logger.info(f"Such archive type there isn't in prefixes list: {filename}")
+                continue
 
-        file_name = Path(file_name)
-        file_names.append(file_name)
+            if re.search(r'\(\d+\)', str(filename)):
+                logger.info(f"Archive {filename} skipped")
+                continue
 
-        prefix_filter = re.search(r'([^_])*', str(file_name))
-        if prefix_filter is None:
-            logger.info("Unknown file: {}".format(file_name))
-            continue
+            if filename not in downloaded_files:
+                await ftp_session.download(filename, destination=cfg.get('STORE', prefix))
+                print('Archive downloading: ', filename)
+                logger.info(f'Archive loaded {filename} in {cfg.get("STORE", prefix)}')
+                log_file(prefix, filename)
 
-        prefix = prefix_filter.group().lower()
-        if prefix == 'adobestock':
-            prefix = 'fotolia'
+                if prefix == 'shutterstock' and filename.suffix == '.zip':
+                    file_path = cfg.get('FTP', 'dir') / filename
+                    unzip_archive(file_path, cfg.get('STORE', prefix))
+                    (cfg.get('STORE', prefix) / filename).unlink()
+            else:
+                logger.info(f"Archive {filename} already downloaded")
 
-        if prefix not in PREFIXES:
-            logger.info("Such archive type there isn't in prefixes list: {}".format(file_name))
-            continue
-
-        if re.search(r'\(\d+\)', str(file_name)):
-            logger.info("Archive {} skipped".format(file_name))
-            continue
-
-        if file_name not in downloaded_files:
-            # ftp_session.download(file_name, destination=cfg.get('STORE', prefix))
-            with open('{}/{}'.format(cfg.get('STORE', prefix), file_name), 'wb') as file:
-                ftp_session.retrbinary('RETR {}'.format(file_name), file.write)
-
-            print('Archive downloading: ', file_name)
-            logger.info('Archive loaded {} in {}'.format(file_name, cfg.get('STORE', prefix)))
-            log_file(prefix, file_name)
-
-            if prefix == 'shutterstock' and file_name.suffix == '.zip':
-                file_path = cfg.get('STORE', prefix) / file_name
-                unzip_archive(file_path, cfg.get('STORE', prefix))
-                (cfg.get('STORE', prefix) / file_name).unlink()
-        else:
-            logger.info("Archive {} already downloaded".format(file_name))
-
-    send_logs_via_email()
+    await send_logs()
 
 
 def log_file(prefix, filename):
     with open(cfg.get('LOG_FILES', prefix), 'a') as file:
-        file.write("{}\n".format(filename))
+        file.write(f"{filename}\n")
 
 
 def unzip_archive(filename, dest: str = ''):
     try:
-        with ZipFile(str(filename)) as zip_ref:
+        with ZipFile(filename) as zip_ref:
             zip_ref.extractall(path=dest)
     except Exception as e:
-        print('File reading error {}'.format(filename))
+        print(f'Ошибка при чтении архива {filename}')
         raise e
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
