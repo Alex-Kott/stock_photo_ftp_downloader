@@ -8,6 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from zipfile import ZipFile
+    import smtplib, ssl
 
 from ftplib import FTP, error_perm
 import backoff
@@ -53,8 +54,6 @@ def exception_handler(e: Exception) -> None:
 
 
 def send_logs_via_email():
-    import smtplib, ssl
-
     # Create a secure SSL context
     context = ssl.create_default_context()
 
@@ -102,10 +101,6 @@ def main():
 
     ftp_session.cwd(cfg.get('FTP', 'dir'))
 
-    # print(ftp_session.nlst())
-    # for i in ftp_session.mlsd():
-    #     print(i)
-
     file_names = []
     for file_name in ftp_session.nlst():
         try:
@@ -136,7 +131,6 @@ def main():
             continue
 
         if file_name not in downloaded_files:
-            # ftp_session.download(file_name, destination=cfg.get('STORE', prefix))
             with open('{}/{}'.format(cfg.get('STORE', prefix), file_name), 'wb') as file:
                 ftp_session.retrbinary('RETR {}'.format(file_name), file.write)
 
