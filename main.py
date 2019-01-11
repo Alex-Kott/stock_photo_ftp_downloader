@@ -8,7 +8,7 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from pathlib import Path
 from zipfile import ZipFile
-    import smtplib, ssl
+import smtplib, ssl
 
 from ftplib import FTP, error_perm
 import backoff
@@ -34,8 +34,10 @@ def create_storage_dirs():
 
 def get_downloaded_files():
     file_names = []
-    # for prefix, dir_name in cfg.items('STORE'):
-    #     file_names.extend([Path(file_name) for file_name in Path(dir_name).iterdir() if file_name.is_file()])
+    for prefix, dir_name in cfg.items('STORE'):
+        file_names.extend([Path(file_name)
+                           for file_name in Path(dir_name).iterdir()
+                           if file_name.is_file()])
     for prefix, log_file_name in cfg.items('LOG_FILES'):
         if prefix == 'default':
             continue
@@ -84,7 +86,8 @@ def send_logs_via_email():
     message.attach(part)
     text = message.as_string()
 
-    with smtplib.SMTP_SSL("smtp.mail.ru", cfg.get('LOADER_EMAIL', 'port'), context=context) as server:
+    with smtplib.SMTP_SSL("smtp.mail.ru", cfg.get('LOADER_EMAIL', 'port'),
+                          context=context) as server:
         server.login(cfg.get('LOADER_EMAIL', 'email'), cfg.get('LOADER_EMAIL', 'password'))
 
         server.sendmail(cfg.get('LOADER_EMAIL', 'email'), cfg.get('EMAIL', 'email'), text)
@@ -104,7 +107,7 @@ def main():
     file_names = []
     for file_name in ftp_session.nlst():
         try:
-            ftp_session.cwd(file_name)
+            ftp_session.cwd("{}/{}".format(cfg.get('FTP', 'dir'), file_name))
             ftp_session.cwd(cfg.get('FTP', 'dir'))
             continue
         except error_perm as e:
@@ -132,7 +135,7 @@ def main():
 
         if file_name not in downloaded_files:
             with open('{}/{}'.format(cfg.get('STORE', prefix), file_name), 'wb') as file:
-                ftp_session.retrbinary('RETR {}'.format(file_name), file.write)
+                ftp_session.retrbinary("RETR {}".format(file_name), file.write)
 
             print('Archive downloading: ', file_name)
             logger.info('Archive loaded {} in {}'.format(file_name, cfg.get('STORE', prefix)))

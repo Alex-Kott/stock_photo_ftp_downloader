@@ -2,3 +2,4 @@ venv/
 .idea/
 logs/
 config.cfg
+files/*
