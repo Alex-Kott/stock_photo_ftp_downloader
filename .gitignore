@@ -1,4 +1,6 @@
 venv/
+venv34/
+__pycache__/
 .idea/
 logs/
 config.cfg
