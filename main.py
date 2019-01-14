@@ -6,7 +6,6 @@ import configparser
 from pathlib import Path
 from email import encoders
 from zipfile import ZipFile
-from typing import Optional, List
 from ftplib import FTP, error_perm
 from threading import Thread, Event
 from email.mime.base import MIMEBase
@@ -47,7 +46,7 @@ def create_storage_dirs():
         os.makedirs(dir_name, exist_ok=True)
 
 
-def get_downloaded_files() -> List[Path]:
+def get_downloaded_files():
     file_names = []
     for prefix, dir_name in cfg.items('STORE'):
         file_names.extend([Path(file_name)
@@ -65,7 +64,7 @@ def get_downloaded_files() -> List[Path]:
     return file_names
 
 
-def send_logs_via_email() -> None:
+def send_logs_via_email():
     # Create a secure SSL context
     context = ssl.create_default_context()
 
@@ -105,7 +104,7 @@ def send_logs_via_email() -> None:
         log_it('Logs sent')
 
 
-def get_ftp_connection() -> FTP:
+def get_ftp_connection():
     ftp_session = FTP(cfg.get('FTP', 'host'))
     ftp_session.login(user=cfg.get('FTP', 'user'), passwd=cfg.get('FTP', 'pass'))
     ftp_session.cwd(cfg.get('FTP', 'dir'))
@@ -113,7 +112,7 @@ def get_ftp_connection() -> FTP:
     return ftp_session
 
 
-def download_archive(file_name: Path, text_field: Text) -> Optional[bool]:
+def download_archive(file_name, text_field):
     if not flag.is_set():
         return
 
@@ -161,7 +160,7 @@ def download_archive(file_name: Path, text_field: Text) -> Optional[bool]:
     return True
 
 
-def main(text_field: Text):
+def main(text_field):
     create_storage_dirs()
     global downloaded_files
     downloaded_files = get_downloaded_files()
@@ -185,7 +184,7 @@ def log_file(prefix, filename):
         file.write("{}\n".format(filename))
 
 
-def unzip_archive(filename, text_field: Text, dest: str = ''):
+def unzip_archive(filename, text_field, dest=''):
     try:
         with ZipFile(str(filename)) as zip_ref:
             zip_ref.extractall(path=dest)
