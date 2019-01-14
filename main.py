@@ -3,6 +3,7 @@ import re
 import ssl
 import smtplib
 import configparser
+import sys
 from pathlib import Path
 from email import encoders
 from zipfile import ZipFile
@@ -112,7 +113,7 @@ def get_ftp_connection():
     return ftp_session
 
 
-def download_archive(file_name, text_field):
+def download_archive(file_name, text_field=None):
     if not flag.is_set():
         return
 
@@ -160,7 +161,7 @@ def download_archive(file_name, text_field):
     return True
 
 
-def main(text_field):
+def main(text_field=None):
     create_storage_dirs()
     global downloaded_files
     downloaded_files = get_downloaded_files()
@@ -202,6 +203,10 @@ def on_closing():
 if __name__ == "__main__":
     flag = Event()
     flag.set()
+    
+    if '--headless' in sys.argv:
+        main()
+        exit()
 
     APP_WINDOW = Tk()
     APP_WINDOW.title = "Stock photo archives downloader"
