@@ -42,9 +42,10 @@ def log_it(message: str, text_field: Text = None, level: str = INFO) -> None:
             pass
 
 
-def create_storage_dirs():
+def check_storage_dirs():
     for prefix, dir_name in cfg.items('STORE'):
-        os.makedirs(dir_name, exist_ok=True)
+        pass
+        # os.makedirs(dir_name, exist_ok=True)
 
 
 def get_downloaded_files():
@@ -162,7 +163,7 @@ def download_archive(file_name, text_field=None):
 
 
 def main(text_field=None):
-    create_storage_dirs()
+    check_storage_dirs()
     global downloaded_files
     downloaded_files = get_downloaded_files()
 
@@ -203,7 +204,7 @@ def on_closing():
 if __name__ == "__main__":
     flag = Event()
     flag.set()
-    
+
     if '--headless' in sys.argv:
         main()
         exit()
