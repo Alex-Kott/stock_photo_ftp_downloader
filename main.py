@@ -50,10 +50,10 @@ def check_storage_dirs():
 
 def get_downloaded_files():
     file_names = []
-    for prefix, dir_name in cfg.items('STORE'):
-        file_names.extend([Path(file_name)
-                           for file_name in Path(dir_name).iterdir()
-                           if file_name.is_file()])
+    # for prefix, dir_name in cfg.items('STORE'):
+    #     file_names.extend([Path(file_name)
+    #                        for file_name in Path(dir_name).iterdir()
+    #                        if file_name.is_file()])
     for prefix, log_file_name in cfg.items('LOG_FILES'):
         if prefix == 'default':
             continue
