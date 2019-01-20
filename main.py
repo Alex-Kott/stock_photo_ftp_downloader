@@ -194,7 +194,7 @@ def main(text_field=None):
 
     futures = []
     with ThreadPoolExecutor(max_workers=4) as executor:
-        for entry_name in entry_names[:50]:
+        for entry_name in entry_names:
             futures.append(executor.submit(download_archive, Path(entry_name), text_field))
 
     for future in futures:
