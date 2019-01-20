@@ -44,7 +44,10 @@ def log_it(message: str, text_field: Text = None, level: str = INFO) -> None:
 
 def create_storage_dirs():
     for prefix, dir_name in cfg.items('STORE'):
-        os.makedirs(dir_name, exist_ok=True)
+        try:
+            os.makedirs(dir_name, exist_ok=True)
+        except Exception as e:
+            pass
 
 
 def get_downloaded_files():
@@ -159,7 +162,24 @@ def download_archive(file_name, text_field=None):
             return 1
 
 
+def check_config():
+    """Сделаем несколько проверок на корректность конфига"""
+    for prefix, value in cfg.items('STORE'):
+        if prefix == 'default':
+            continue
+        if prefix not in PREFIXES:
+            log_it('Неизвестный префикс в секции [STORE]: {}'.format(prefix))
+    for prefix, value in cfg.items('LOG_FILES'):
+        if prefix == 'default':
+            continue
+        if prefix not in PREFIXES:
+            log_it('Неизвестный префикс в секции [LOG_FILES]: {}'.format(prefix))
+
+
 def main(text_field=None):
+    check_config()
+    create_storage_dirs()
+
     statistic = {
         'downloaded': 0,
         'skipped': 0,
@@ -174,7 +194,7 @@ def main(text_field=None):
 
     futures = []
     with ThreadPoolExecutor(max_workers=4) as executor:
-        for entry_name in entry_names[:15]:
+        for entry_name in entry_names[:10]:
             futures.append(executor.submit(download_archive, Path(entry_name), text_field))
 
     for future in futures:
