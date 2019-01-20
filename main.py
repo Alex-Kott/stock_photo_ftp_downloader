@@ -165,7 +165,7 @@ def main(text_field=None):
         'skipped': 0,
         'failed': 0
     }
-    create_storage_dirs()
+    # create_storage_dirs()
     global downloaded_files
     downloaded_files = get_downloaded_files()
 
