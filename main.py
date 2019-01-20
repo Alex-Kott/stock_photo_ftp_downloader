@@ -23,12 +23,12 @@ basicConfig(level=ERROR,
             format='%(asctime)s %(name)-12s %(levelname)-8s %(message)s',
             datefmt='%m-%d %H:%M',
             filename=cfg.get('LOG_FILES', 'default'))
+logger = getLogger('ftp_downloader')
 
 PREFIXES = "shutterstock fotolia depositphoto istockphoto".strip().split(' ')
 
 
 def log_it(message: str, text_field: Text = None, level: str = INFO) -> None:
-    logger = getLogger('ftp_downloader')
     logger.setLevel(level)
 
     print(message)
@@ -42,18 +42,13 @@ def log_it(message: str, text_field: Text = None, level: str = INFO) -> None:
             pass
 
 
-def check_storage_dirs():
+def create_storage_dirs():
     for prefix, dir_name in cfg.items('STORE'):
-        pass
-        # os.makedirs(dir_name, exist_ok=True)
+        os.makedirs(dir_name, exist_ok=True)
 
 
 def get_downloaded_files():
     file_names = []
-    # for prefix, dir_name in cfg.items('STORE'):
-    #     file_names.extend([Path(file_name)
-    #                        for file_name in Path(dir_name).iterdir()
-    #                        if file_name.is_file()])
     for prefix, log_file_name in cfg.items('LOG_FILES'):
         if prefix == 'default':
             continue
@@ -145,7 +140,9 @@ def download_archive(file_name, text_field=None):
                    text_field=text_field)
             return
 
-        if file_name not in downloaded_files:
+        if file_name in downloaded_files:
+            return 0
+        else:
             log_it("File {} will be load".format(file_name), text_field=text_field)
             with open('{}/{}'.format(cfg.get('STORE', prefix), file_name), 'wb') as file:
                 ftp_session.retrbinary("RETR {}".format(file_name), file.write)
@@ -159,11 +156,16 @@ def download_archive(file_name, text_field=None):
                 unzip_archive(file_path, text_field=text_field, dest=cfg.get('STORE', prefix))
                 (cfg.get('STORE', prefix) / file_name).unlink()
 
-    return True
+            return 1
 
 
 def main(text_field=None):
-    check_storage_dirs()
+    statistic = {
+        'downloaded': 0,
+        'skipped': 0,
+        'failed': 0
+    }
+    create_storage_dirs()
     global downloaded_files
     downloaded_files = get_downloaded_files()
 
@@ -171,14 +173,28 @@ def main(text_field=None):
         entry_names = ftp_session.nlst()
 
     futures = []
-    with ThreadPoolExecutor(max_workers=4, ) as executor:
+    with ThreadPoolExecutor(max_workers=4) as executor:
         for entry_name in entry_names:
             futures.append(executor.submit(download_archive, Path(entry_name), text_field))
 
-    results = [future.result() for future in futures]
+    for future in futures:
+        try:
+            result = future.result()
+            if result:
+                statistic['downloaded'] += 1
+            else:
+                statistic['skipped'] += 1
+        except Exception as e:
+            statistic['failed'] += 1
+            log_it(str(e))
+            logger.exception(e)
 
-    if any(results):
-        send_logs_via_email()
+    final_log_message = '''
+    Загружено: {}
+    Пропущено: {}
+    Ошибок: {}\n\n'''.format(statistic['downloaded'], statistic['skipped'], statistic['failed'])
+    log_it(final_log_message)
+    send_logs_via_email()
 
 
 def log_file(prefix, filename):
